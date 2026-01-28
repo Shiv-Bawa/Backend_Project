@@ -3,15 +3,23 @@
 import dotenv from "dotenv";
 import connectDB from "./db/index.js";
 import {app} from './app.js';
+import path from "path"; //doing own
 
 /*
 import mongoose from mongoodse;
 import {DB_NAME} from "./constants";
 */
 
+/*
 dotenv.config({
-    path: "./env"
+    path: "./.env"
 })
+*/
+
+dotenv.config();
+
+// dotenv.config({ path: path.resolve( process.cwd() ,".env" ) });
+
 
 connectDB()
 .then(() => {
