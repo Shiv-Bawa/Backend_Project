@@ -262,7 +262,10 @@ const changeCurrentPassword = asyncHandler(async(req,res) => {
 
     return res
     .status(200)
-    .json(new ApiResponse(200, {}, "Password changed Successfully"))
+    .json(new ApiResponse(
+      200, 
+      {}, 
+      "Password changed Successfully"))
 })
 
 const getCurrentUser = asyncHandler(async(req, res)=>{
@@ -278,7 +281,7 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
     throw new ApiError(400, "All fields are required")
   }
 
-  const user = User.findByIdAndUpdate(
+  const user = await User.findByIdAndUpdate(
     req.user?._id,
     { 
       $set : {
@@ -353,6 +356,82 @@ const updateUseroverImage = asyncHandler(async(req, res)=> {
 
 })
 
+const getUserChannelProfile = asyncHandler(async(req,res) => {
+  const {username} = req.params
+
+  if(!username?.trim()){
+      throw new ApiError(400, "username is missing")
+  }
+
+  const channel = await User.aggregate([
+    {
+      $match : {
+        username: username?.toLowerCase
+      }
+    },
+    {
+      $lookup : {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers"  
+      }
+    },
+    {
+      $lookup : {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo"   
+      }
+    },
+    {
+      $addFields : {
+        subscribersCount: {
+          $size: "$subscribers"
+        },
+        channelSubscribedToCount:{
+          $size: "subscribedTo"
+        },
+        // now here we are giving msg to frontend dev that a user is subcribed or not in the form of true or false
+        isSubscribed: {
+          $cond: {
+            if: {$in: [req.user?._id, "$subscribers.subscriber"]},
+            then: true,
+            else: false
+          }
+        }
+      }
+    },
+    {
+      // here we use project: iska kaam hota hai ki mai sirf usse selected chizze dunga
+      $project: {
+        fullName: 1,
+        username: 1,
+        subscribersCount: 1,
+        channelSubscribedToCount: 1,
+        isSubscribed: 1,
+        avatar: 1,
+        coverImage: 1,
+        email: 1
+
+      }
+    }
+  ])
+  // check karne ke liye yahan console.log karke dekh sakte hai kki aggregate pipelines hamme return kya karti hai
+
+  if (!channel?.length) {
+      throw new ApiError(404, " channel does not exists")
+  }
+
+  return res 
+  .status(200)
+  .json(
+    new ApiResponse(200, channel[0], "User channel fetched successfully")
+  )
+
+})
+
 export { 
   registerUser,
   loginUser,
@@ -362,5 +441,6 @@ export {
   getCurrentUser,
   updateAccountDetails,
   updateUserAvatar,
-  updateUseroverImage
+  updateUseroverImage,
+  getUserChannelProfile
  };
