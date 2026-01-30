@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import {asyncHandler} from '../utils/asyncHandler.js';
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
@@ -9,7 +10,7 @@ const generateAccessAndRefreshTokens = async(userId)=> {
   try {
     const user = await User.findById(userId)
     const accessToken = user.generateAccessToken()
-    const refreshToken = user.generateAccessToken()
+    const refreshToken = user.generateRefreshToken()
     
     user.refreshToken = refreshToken
     await user.save({ validateBeforeSave: false})
@@ -172,8 +173,8 @@ const logoutUser = asyncHandler(async(req, res) => {
   await User.findByIdAndUpdate(
     req.user._id,
     {
-      $set: {
-        refreshToken: undefined
+      $unset: {
+        refreshToken: 1 // this removes the field from the document
       }
     },
     {
@@ -206,7 +207,7 @@ const refreshAccessToken = asyncHandler(async (req, res)=>{
       process.env.REFRESH_TOKEN_SECRET
     )
   
-    const user = User.findById(decodedToken?._id)
+    const user = await User.findById(decodedToken?._id)
   
     if(!user){
       throw new ApiError(401, "Invalid refresh token")
@@ -228,7 +229,7 @@ const refreshAccessToken = asyncHandler(async (req, res)=>{
     .status(200)
     .cookie("accessToken", accessToken, options)
     .cookie("newRefreshToken", newRefreshToken, options)
-    ,json(
+    .json(
       new ApiResponse(
         200,
         {accessToken, refreshToken: newRefreshToken},
@@ -249,7 +250,7 @@ const changeCurrentPassword = asyncHandler(async(req,res) => {
     // aur middleware it means woh req.user hai 
     // aur wahan se hum user id nikal skte hai or iske basis pe user find kr skte hai
 
-    const user = await  user.findById(req.user?.
+    const user = await  User.findById(req.user?.
       _id)
     const ispasswordCorrect = await user.ispasswordCorrect(oldPassword)
 
@@ -270,14 +271,14 @@ const changeCurrentPassword = asyncHandler(async(req,res) => {
 
 const getCurrentUser = asyncHandler(async(req, res)=>{
   return res 
-  .stauts(200)
+  .status(200)
   .json(200,req.user, "Current User fetched successfully ")
 })
 
 const updateAccountDetails = asyncHandler(async(req, res) => {
   const {fullName, email} = req.body
 
-  if(!fullName || email){
+  if(!fullName || !email){
     throw new ApiError(400, "All fields are required")
   }
 
@@ -391,7 +392,7 @@ const getUserChannelProfile = asyncHandler(async(req,res) => {
           $size: "$subscribers"
         },
         channelSubscribedToCount:{
-          $size: "subscribedTo"
+          $size: "$subscribedTo"
         },
         // now here we are giving msg to frontend dev that a user is subcribed or not in the form of true or false
         isSubscribed: {
@@ -452,7 +453,7 @@ const getWatchHistory = asyncHandler(async(req, res) => {
               localField: "owner",
               foreignField: "_id",
               as: "owner",
-              pipelines: [
+              pipeline: [
                 {
                   $project: {
                     fullName: 1,
